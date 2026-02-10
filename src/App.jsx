@@ -3,7 +3,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 const SALARY_TIERS = [
   { label: "Intern / Entry", annual: 45000, emoji: "📎" },
   { label: "Mid-Level", annual: 85000, emoji: "💼" },
-  { label: "Manager / Sr. Manager", annual: 130000, emoji: "📊" },
+  { label: "Mgr / Sr. Mgr", annual: 130000, emoji: "📊" },
   { label: "Director / VP", annual: 200000, emoji: "🏌️" },
   { label: "C-Suite", annual: 350000, emoji: "🛩️" },
 ];
@@ -47,11 +47,12 @@ const SARCASTIC_MILESTONES = [
 ];
 
 const QUICK_PRESETS = [
-  { label: "Daily Standup", subtitle: "5 mid-level, 1 manager", attendees: [0, 5, 1, 0, 0] },
-  { label: "Sprint Planning", subtitle: "3 mid-level, 2 managers, 1 director", attendees: [0, 3, 2, 1, 0] },
-  { label: "All-Hands", subtitle: "5 entry, 10 mid, 8 managers, 4 directors, 2 C-suite", attendees: [5, 10, 8, 4, 2] },
-  { label: "Board Meeting", subtitle: "2 directors, 6 C-suite", attendees: [0, 0, 0, 2, 6] },
-  { label: '"Quick Sync"', subtitle: "3 managers who could've Slacked", attendees: [0, 0, 3, 0, 0] },
+  { label: "Daily Standup", subtitle: "5 mid, 1 mgr", attendees: [0, 5, 1, 0, 0, 0] },
+  { label: "Sprint Planning", subtitle: "3 mid, 2 mgrs, 1 dir", attendees: [0, 3, 2, 1, 0, 0] },
+  { label: "All-Hands", subtitle: "5+10+8+4+2", attendees: [5, 10, 8, 4, 2, 0] },
+  { label: "Board Meeting", subtitle: "2 dirs, 6 C-suite", attendees: [0, 0, 0, 2, 6, 0] },
+  { label: '"Quick Sync"', subtitle: "3 mgrs who could've Slacked", attendees: [0, 0, 3, 0, 0, 0] },
+  { label: "Friday 4:45pm", subtitle: "1 VP, 1 mgr, 'one quick thing'", attendees: [0, 0, 1, 1, 0, 0] },
 ];
 
 const formatCurrency = (amount) => {
@@ -88,32 +89,142 @@ const getCurrentMilestone = (amount, lastMilestoneRef) => {
   return milestone;
 };
 
-function AttendeePicker({ attendees, setAttendees }) {
+/* ─── Dark Mode Toggle ─── */
+function ThemeToggle({ dark, onToggle }) {
+  return (
+    <button
+      onClick={onToggle}
+      aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
+      style={{
+        width: 44,
+        height: 44,
+        borderRadius: 12,
+        border: `1px solid var(--border)`,
+        background: "var(--toggle-bg)",
+        cursor: "pointer",
+        fontSize: 20,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        transition: "all 0.2s ease",
+      }}
+    >
+      {dark ? "☀️" : "🌙"}
+    </button>
+  );
+}
+
+/* ─── Toast Component ─── */
+function CopyToast({ visible, text, onHide }) {
+  useEffect(() => {
+    if (visible) {
+      const timer = setTimeout(onHide, 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [visible, onHide]);
+
+  if (!visible) return null;
+
+  return (
+    <div style={{
+      position: "fixed",
+      bottom: 24,
+      left: "50%",
+      transform: "translateX(-50%)",
+      zIndex: 1000,
+      width: "calc(100% - 40px)",
+      maxWidth: 400,
+      animation: "toastIn 0.3s ease",
+    }}>
+      <div style={{
+        background: "#0f172a",
+        borderRadius: 12,
+        padding: "16px 20px",
+        boxShadow: "0 8px 32px rgba(0,0,0,0.3)",
+        border: "1px solid #334155",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+          <span style={{ fontSize: 16 }}>✅</span>
+          <span style={{ fontSize: 14, fontWeight: 700, color: "#fff", fontFamily: "'DM Sans', sans-serif" }}>
+            Copied! Now paste it on LinkedIn
+          </span>
+        </div>
+        <div style={{
+          background: "rgba(255,255,255,0.07)",
+          borderRadius: 8,
+          padding: "10px 12px",
+          fontSize: 12,
+          color: "#94a3b8",
+          fontFamily: "'DM Sans', sans-serif",
+          lineHeight: 1.5,
+          whiteSpace: "pre-wrap",
+          maxHeight: 80,
+          overflow: "hidden",
+        }}>
+          {text}
+        </div>
+        <div style={{
+          marginTop: 10,
+          fontSize: 12,
+          color: "#64748b",
+          fontFamily: "'DM Sans', sans-serif",
+          textAlign: "center",
+        }}>
+          Open LinkedIn → Start a post → Paste (Ctrl+V)
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Attendee Picker ─── */
+function AttendeePicker({ attendees, setAttendees, customSalary, setCustomSalary }) {
   return (
     <div style={{ marginBottom: 32 }}>
-      <label style={{ display: "block", fontSize: 11, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: "#6b7280", marginBottom: 10, fontFamily: "'DM Sans', sans-serif" }}>
+      <label style={{
+        display: "block", fontSize: 12, fontWeight: 600, letterSpacing: "0.1em",
+        textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 10,
+        fontFamily: "'DM Sans', sans-serif",
+      }}>
         Attendees
       </label>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+      <div
+        className="attendee-grid"
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr 1fr",
+          gap: 8,
+        }}
+      >
         {SALARY_TIERS.map((tier, tierIdx) => {
           const count = attendees[tierIdx] || 0;
           return (
             <div key={tierIdx} style={{
-              background: count > 0 ? "#f8fafc" : "#fff",
-              border: count > 0 ? "1.5px solid #1e293b" : "1.5px solid #e2e8f0",
+              background: count > 0 ? "var(--bg-card-active)" : "var(--bg-card)",
+              border: count > 0 ? `1.5px solid var(--border-active)` : `1.5px solid var(--border)`,
               borderRadius: 10,
-              padding: "12px 16px",
-              minWidth: 140,
-              flex: "1 1 140px",
+              padding: "14px 14px 12px",
+              display: "flex",
+              flexDirection: "column",
               transition: "all 0.2s ease",
             }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: "#1e293b", marginBottom: 2, fontFamily: "'DM Sans', sans-serif" }}>
-                {tier.emoji} {tier.label}
+              {/* Label area — fixed height so controls align */}
+              <div style={{ minHeight: 40, marginBottom: 6 }}>
+                <div style={{
+                  fontSize: 14, fontWeight: 600, color: "var(--text-primary)",
+                  fontFamily: "'DM Sans', sans-serif", lineHeight: 1.3,
+                }}>
+                  {tier.emoji} {tier.label}
+                </div>
+                <div style={{
+                  fontSize: 12, color: "var(--text-muted)", marginTop: 2,
+                  fontFamily: "'DM Mono', monospace",
+                }}>
+                  ${(tier.annual / 1000).toFixed(0)}k/yr
+                </div>
               </div>
-              <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 10, fontFamily: "'DM Mono', monospace" }}>
-                ${(tier.annual / 1000).toFixed(0)}k/yr
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              {/* Controls — always at the bottom */}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: "auto" }}>
                 <button
                   onClick={() => {
                     const next = [...attendees];
@@ -121,13 +232,19 @@ function AttendeePicker({ attendees, setAttendees }) {
                     setAttendees(next);
                   }}
                   style={{
-                    width: 28, height: 28, borderRadius: 6, border: "1px solid #e2e8f0",
-                    background: "#fff", cursor: "pointer", fontSize: 16, color: "#64748b",
+                    width: 34, height: 34, borderRadius: 8,
+                    border: `1px solid var(--minus-border)`,
+                    background: "var(--minus-bg)", cursor: "pointer",
+                    fontSize: 20, color: "var(--minus-color)",
                     display: "flex", alignItems: "center", justifyContent: "center",
-                    fontFamily: "'DM Sans', sans-serif",
+                    fontFamily: "'DM Sans', sans-serif", flexShrink: 0,
                   }}
                 >−</button>
-                <span style={{ fontSize: 18, fontWeight: 700, color: "#1e293b", minWidth: 20, textAlign: "center", fontFamily: "'DM Mono', monospace" }}>
+                <span style={{
+                  fontSize: 22, fontWeight: 700, color: "var(--text-primary)",
+                  minWidth: 24, textAlign: "center",
+                  fontFamily: "'DM Mono', monospace", flex: 1,
+                }}>
                   {count}
                 </span>
                 <button
@@ -137,29 +254,126 @@ function AttendeePicker({ attendees, setAttendees }) {
                     setAttendees(next);
                   }}
                   style={{
-                    width: 28, height: 28, borderRadius: 6, border: "1px solid #1e293b",
-                    background: "#1e293b", cursor: "pointer", fontSize: 16, color: "#fff",
+                    width: 34, height: 34, borderRadius: 8,
+                    border: "1px solid var(--btn-bg)",
+                    background: "var(--btn-bg)", cursor: "pointer",
+                    fontSize: 20, color: "var(--btn-text)",
                     display: "flex", alignItems: "center", justifyContent: "center",
-                    fontFamily: "'DM Sans', sans-serif",
+                    fontFamily: "'DM Sans', sans-serif", flexShrink: 0,
                   }}
                 >+</button>
               </div>
             </div>
           );
         })}
+
+        {/* Custom salary tier */}
+        {(() => {
+          const tierIdx = 5;
+          const count = attendees[tierIdx] || 0;
+          return (
+            <div style={{
+              background: count > 0 ? "var(--bg-card-active)" : "var(--bg-card)",
+              border: count > 0 ? `1.5px solid var(--border-active)` : `1.5px solid var(--border)`,
+              borderRadius: 10,
+              padding: "14px 14px 12px",
+              display: "flex",
+              flexDirection: "column",
+              transition: "all 0.2s ease",
+            }}>
+              <div style={{ minHeight: 40, marginBottom: 6 }}>
+                <div style={{
+                  fontSize: 14, fontWeight: 600, color: "var(--text-primary)",
+                  fontFamily: "'DM Sans', sans-serif", lineHeight: 1.3,
+                }}>
+                  ✏️ Custom
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 2 }}>
+                  <span style={{
+                    fontSize: 12, color: "var(--text-muted)",
+                    fontFamily: "'DM Mono', monospace",
+                  }}>$</span>
+                  <input
+                    type="number"
+                    value={customSalary || ""}
+                    onChange={(e) => setCustomSalary(Number(e.target.value) || 0)}
+                    placeholder="salary"
+                    style={{
+                      width: "100%",
+                      border: `1px solid var(--input-border)`,
+                      borderRadius: 4,
+                      padding: "3px 6px",
+                      fontSize: 12,
+                      fontFamily: "'DM Mono', monospace",
+                      color: "var(--text-primary)",
+                      background: "var(--input-bg)",
+                      outline: "none",
+                    }}
+                  />
+                  <span style={{
+                    fontSize: 11, color: "var(--text-muted)",
+                    fontFamily: "'DM Mono', monospace", whiteSpace: "nowrap",
+                  }}>/yr</span>
+                </div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: "auto" }}>
+                <button
+                  onClick={() => {
+                    const next = [...attendees];
+                    next[tierIdx] = Math.max(0, (next[tierIdx] || 0) - 1);
+                    setAttendees(next);
+                  }}
+                  style={{
+                    width: 34, height: 34, borderRadius: 8,
+                    border: `1px solid var(--minus-border)`,
+                    background: "var(--minus-bg)", cursor: "pointer",
+                    fontSize: 20, color: "var(--minus-color)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontFamily: "'DM Sans', sans-serif", flexShrink: 0,
+                  }}
+                >−</button>
+                <span style={{
+                  fontSize: 22, fontWeight: 700, color: "var(--text-primary)",
+                  minWidth: 24, textAlign: "center",
+                  fontFamily: "'DM Mono', monospace", flex: 1,
+                }}>
+                  {count}
+                </span>
+                <button
+                  onClick={() => {
+                    if (!customSalary || customSalary <= 0) return;
+                    const next = [...attendees];
+                    next[tierIdx] = (next[tierIdx] || 0) + 1;
+                    setAttendees(next);
+                  }}
+                  style={{
+                    width: 34, height: 34, borderRadius: 8,
+                    border: "1px solid var(--btn-bg)",
+                    background: (!customSalary || customSalary <= 0) ? "var(--border)" : "var(--btn-bg)",
+                    cursor: (!customSalary || customSalary <= 0) ? "not-allowed" : "pointer",
+                    fontSize: 20, color: "var(--btn-text)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontFamily: "'DM Sans', sans-serif", flexShrink: 0,
+                  }}
+                >+</button>
+              </div>
+            </div>
+          );
+        })()}
       </div>
     </div>
   );
 }
 
+/* ─── Cost Display ─── */
 function CostDisplay({ cost, elapsed, running, comparison, milestoneMessage }) {
   return (
     <div style={{
       textAlign: "center",
       padding: "48px 24px",
-      background: "linear-gradient(180deg, #f8fafc 0%, #fff 100%)",
+      background: "var(--cost-display-bg)",
       borderRadius: 16,
-      border: "1px solid #e2e8f0",
+      border: `1px solid var(--border)`,
       marginBottom: 24,
       position: "relative",
       overflow: "hidden",
@@ -172,13 +386,17 @@ function CostDisplay({ cost, elapsed, running, comparison, milestoneMessage }) {
           animation: "burnBar 2s linear infinite",
         }} />
       )}
-      <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.15em", textTransform: "uppercase", color: running ? "#ef4444" : "#94a3b8", marginBottom: 8, fontFamily: "'DM Sans', sans-serif" }}>
+      <div style={{
+        fontSize: 12, fontWeight: 600, letterSpacing: "0.15em", textTransform: "uppercase",
+        color: running ? "#ef4444" : "var(--text-muted)", marginBottom: 8,
+        fontFamily: "'DM Sans', sans-serif",
+      }}>
         {running ? "💸 Burning" : elapsed > 0 ? "Final Damage" : "Ready"}
       </div>
       <div style={{
-        fontSize: cost > 9999 ? 56 : 72,
+        fontSize: cost > 9999 ? 48 : 64,
         fontWeight: 800,
-        color: "#0f172a",
+        color: "var(--text-primary)",
         fontFamily: "'DM Mono', monospace",
         lineHeight: 1,
         marginBottom: 8,
@@ -187,18 +405,20 @@ function CostDisplay({ cost, elapsed, running, comparison, milestoneMessage }) {
       }}>
         {formatCurrency(cost)}
       </div>
-      <div style={{ fontSize: 16, color: "#64748b", fontFamily: "'DM Mono', monospace", marginBottom: 16 }}>
+      <div style={{
+        fontSize: 18, color: "var(--text-secondary)", fontFamily: "'DM Mono', monospace", marginBottom: 16,
+      }}>
         {formatTime(elapsed)}
       </div>
       {comparison && (
         <div style={{
           display: "inline-block",
-          background: "#fef3c7",
-          border: "1px solid #fde68a",
+          background: "var(--comparison-bg)",
+          border: `1px solid var(--comparison-border)`,
           borderRadius: 8,
-          padding: "8px 16px",
-          fontSize: 13,
-          color: "#92400e",
+          padding: "10px 18px",
+          fontSize: 14,
+          color: "var(--comparison-text)",
           fontFamily: "'DM Sans', sans-serif",
           marginBottom: milestoneMessage ? 12 : 0,
         }}>
@@ -208,8 +428,8 @@ function CostDisplay({ cost, elapsed, running, comparison, milestoneMessage }) {
       {milestoneMessage && (
         <div style={{
           display: "block",
-          fontSize: 14,
-          color: "#64748b",
+          fontSize: 15,
+          color: "var(--text-secondary)",
           fontStyle: "italic",
           fontFamily: "'DM Sans', sans-serif",
           marginTop: 8,
@@ -222,6 +442,7 @@ function CostDisplay({ cost, elapsed, running, comparison, milestoneMessage }) {
   );
 }
 
+/* ─── Ending Quips ─── */
 const ENDING_QUIPS = [
   { max: 50, quips: [
     "That was practically free. By corporate standards.",
@@ -270,19 +491,28 @@ const getEndingQuip = (cost) => {
   return "No comment.";
 };
 
-function SummaryCard({ cost, elapsed, totalAttendees, onReset }) {
+/* ─── Summary Card ─── */
+function SummaryCard({ cost, elapsed, totalAttendees, onReset, onCopy }) {
   const comparison = getCurrentComparison(cost);
   const perPerson = totalAttendees > 0 ? cost / totalAttendees : 0;
   const perMinute = elapsed > 60 ? cost / (elapsed / 60) : cost;
   const quip = getEndingQuip(cost);
   const couldveBeenAnEmail = elapsed <= 300;
 
+  const handleCopy = () => {
+    const emailBadge = elapsed <= 300 ? `\n\n📧 Official verdict: Could've been an email.` : "";
+    const text = `Our ${formatTime(elapsed)} meeting with ${totalAttendees} people just cost ${formatCurrency(cost)}. That's more than ${comparison ? comparison.label : "expected"}.${emailBadge}\n\nWas it worth it? 🤔\n\nCalculate yours → thismeetingcosts.io`;
+    navigator.clipboard.writeText(text).then(() => {
+      onCopy(text);
+    }).catch(() => {});
+  };
+
   return (
     <div style={{
-      background: "#0f172a",
+      background: "var(--summary-bg)",
       borderRadius: 16,
-      padding: 32,
-      color: "#fff",
+      padding: "32px 24px",
+      color: "var(--summary-text)",
       marginBottom: 24,
       animation: "fadeIn 0.6s ease",
       position: "relative",
@@ -290,78 +520,80 @@ function SummaryCard({ cost, elapsed, totalAttendees, onReset }) {
     }}>
       {couldveBeenAnEmail && (
         <div style={{
-          position: "absolute",
-          top: 16,
-          right: -32,
           background: "#ef4444",
-          color: "#fff",
-          fontSize: 10,
-          fontWeight: 700,
-          letterSpacing: "0.08em",
-          textTransform: "uppercase",
-          padding: "6px 40px",
-          transform: "rotate(35deg)",
-          fontFamily: "'DM Sans', sans-serif",
-          boxShadow: "0 2px 8px rgba(239,68,68,0.4)",
-          zIndex: 1,
+          borderRadius: 8,
+          padding: "10px 20px",
+          marginBottom: 20,
+          textAlign: "center",
           animation: "stampIn 0.5s ease-out 0.3s both",
         }}>
-          📧 Could've been an email
+          <span style={{
+            fontSize: 13, fontWeight: 700, letterSpacing: "0.05em",
+            textTransform: "uppercase", color: "#fff",
+            fontFamily: "'DM Sans', sans-serif",
+          }}>
+            📧 Could've been an email
+          </span>
         </div>
       )}
-      <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.15em", textTransform: "uppercase", color: "#94a3b8", marginBottom: 8, fontFamily: "'DM Sans', sans-serif" }}>
+
+      <div style={{
+        fontSize: 12, fontWeight: 600, letterSpacing: "0.15em", textTransform: "uppercase",
+        color: "var(--summary-muted)", marginBottom: 8, fontFamily: "'DM Sans', sans-serif",
+      }}>
         Meeting Post-Mortem
       </div>
       <div style={{
-        fontSize: 16,
-        color: "#e2e8f0",
-        fontStyle: "italic",
-        fontFamily: "'DM Sans', sans-serif",
-        marginBottom: 24,
-        lineHeight: 1.5,
+        fontSize: 17, color: "var(--summary-subtle)", fontStyle: "italic",
+        fontFamily: "'DM Sans', sans-serif", marginBottom: 24, lineHeight: 1.5,
         animation: "fadeIn 0.8s ease",
       }}>
         "{quip}"
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 20, marginBottom: 24 }}>
+
+      <div style={{
+        display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 20, marginBottom: 24,
+      }} className="summary-stats">
         <div>
-          <div style={{ fontSize: 11, color: "#64748b", fontFamily: "'DM Sans', sans-serif", marginBottom: 4 }}>Total Cost</div>
+          <div style={{ fontSize: 12, color: "var(--summary-muted)", fontFamily: "'DM Sans', sans-serif", marginBottom: 4 }}>Total Cost</div>
           <div style={{ fontSize: 24, fontWeight: 700, fontFamily: "'DM Mono', monospace" }}>{formatCurrency(cost)}</div>
         </div>
         <div>
-          <div style={{ fontSize: 11, color: "#64748b", fontFamily: "'DM Sans', sans-serif", marginBottom: 4 }}>Per Person</div>
+          <div style={{ fontSize: 12, color: "var(--summary-muted)", fontFamily: "'DM Sans', sans-serif", marginBottom: 4 }}>Per Person</div>
           <div style={{ fontSize: 24, fontWeight: 700, fontFamily: "'DM Mono', monospace" }}>{formatCurrency(perPerson)}</div>
         </div>
         <div>
-          <div style={{ fontSize: 11, color: "#64748b", fontFamily: "'DM Sans', sans-serif", marginBottom: 4 }}>Per Minute</div>
+          <div style={{ fontSize: 12, color: "var(--summary-muted)", fontFamily: "'DM Sans', sans-serif", marginBottom: 4 }}>Per Minute</div>
           <div style={{ fontSize: 24, fontWeight: 700, fontFamily: "'DM Mono', monospace" }}>{formatCurrency(perMinute)}</div>
         </div>
       </div>
+
       {comparison && (
-        <div style={{ fontSize: 14, color: "#cbd5e1", fontFamily: "'DM Sans', sans-serif", marginBottom: 24, padding: "12px 16px", background: "rgba(255,255,255,0.05)", borderRadius: 8 }}>
+        <div style={{
+          fontSize: 15, color: "var(--summary-subtle)", fontFamily: "'DM Sans', sans-serif",
+          marginBottom: 24, padding: "12px 16px", background: "var(--summary-overlay)", borderRadius: 8,
+        }}>
           This meeting cost more than <strong style={{ color: "#fbbf24" }}>{comparison.label}</strong>. Hope it was worth it.
         </div>
       )}
-      <div style={{ display: "flex", gap: 12 }}>
+
+      <div style={{ display: "flex", gap: 12 }} className="summary-buttons">
         <button
           onClick={onReset}
           style={{
-            flex: 1, padding: "12px 24px", borderRadius: 8, border: "1px solid #334155",
-            background: "transparent", color: "#fff", fontSize: 14, fontWeight: 600,
+            flex: 1, padding: "14px 24px", borderRadius: 8,
+            border: `1px solid var(--summary-border)`,
+            background: "transparent", color: "var(--summary-text)", fontSize: 15, fontWeight: 600,
             cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
           }}
         >
           New Meeting
         </button>
         <button
-          onClick={() => {
-            const emailBadge = elapsed <= 300 ? `\n\n📧 Official verdict: Could've been an email.` : "";
-            const text = `Our ${formatTime(elapsed)} meeting with ${totalAttendees} people just cost ${formatCurrency(cost)}. That's more than ${comparison ? comparison.label : "expected"}.${emailBadge}\n\nWas it worth it? 🤔\n\nCalculate yours → thismeetingcosts.io`;
-            navigator.clipboard.writeText(text).catch(() => {});
-          }}
+          onClick={handleCopy}
           style={{
-            flex: 1, padding: "12px 24px", borderRadius: 8, border: "none",
-            background: "#3b82f6", color: "#fff", fontSize: 14, fontWeight: 600,
+            flex: 1, padding: "14px 24px", borderRadius: 8, border: "none",
+            background: "#3b82f6", color: "#fff", fontSize: 15, fontWeight: 600,
             cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
           }}
         >
@@ -372,20 +604,38 @@ function SummaryCard({ cost, elapsed, totalAttendees, onReset }) {
   );
 }
 
+/* ─── Main App ─── */
 export default function App() {
-  const [attendees, setAttendees] = useState([0, 0, 0, 0, 0]);
+  const [attendees, setAttendees] = useState([0, 0, 0, 0, 0, 0]); // 6th slot = custom
+  const [customSalary, setCustomSalary] = useState(0);
   const [running, setRunning] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [cost, setCost] = useState(0);
   const [showSummary, setShowSummary] = useState(false);
   const [milestoneMessage, setMilestoneMessage] = useState("");
+  const [toastVisible, setToastVisible] = useState(false);
+  const [toastText, setToastText] = useState("");
+  const [dark, setDark] = useState(() => {
+    if (typeof window !== "undefined" && window.matchMedia) {
+      return window.matchMedia("(prefers-color-scheme: dark)").matches;
+    }
+    return false;
+  });
   const lastMilestoneRef = useRef(0);
   const intervalRef = useRef(null);
+
+  // Apply theme to document
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
+  }, [dark]);
+
+  const allTiers = [...SALARY_TIERS, { label: "Custom", annual: customSalary || 0, emoji: "✏️" }];
 
   const totalAttendees = attendees.reduce((s, c) => s + c, 0);
 
   const costPerSecond = attendees.reduce((sum, count, idx) => {
-    const hourly = SALARY_TIERS[idx].annual / 2080;
+    const annual = allTiers[idx].annual;
+    const hourly = annual / 2080;
     return sum + count * (hourly / 3600);
   }, 0);
 
@@ -413,6 +663,11 @@ export default function App() {
     lastMilestoneRef.current = 0;
   }, []);
 
+  const handleCopy = useCallback((text) => {
+    setToastText(text);
+    setToastVisible(true);
+  }, []);
+
   useEffect(() => {
     if (running) {
       intervalRef.current = setInterval(() => {
@@ -437,22 +692,33 @@ export default function App() {
   return (
     <div style={{
       minHeight: "100vh",
-      background: "#fff",
+      background: "var(--bg)",
       fontFamily: "'DM Sans', sans-serif",
+      transition: "background 0.3s ease",
     }}>
+      <CopyToast
+        visible={toastVisible}
+        text={toastText}
+        onHide={() => setToastVisible(false)}
+      />
 
       <div style={{ maxWidth: 640, margin: "0 auto", padding: "40px 20px" }}>
         {/* Header */}
-        <div style={{ marginBottom: 40, textAlign: "center" }}>
+        <div style={{ marginBottom: 40, textAlign: "center", position: "relative" }}>
+          {/* Theme toggle — top right */}
+          <div style={{ position: "absolute", top: 0, right: 0 }}>
+            <ThemeToggle dark={dark} onToggle={() => setDark((d) => !d)} />
+          </div>
+
           <div style={{
             display: "inline-block",
             fontSize: 11,
             fontWeight: 600,
             letterSpacing: "0.15em",
             textTransform: "uppercase",
-            color: "#94a3b8",
-            background: "#f8fafc",
-            border: "1px solid #e2e8f0",
+            color: "var(--text-muted)",
+            background: "var(--bg-secondary)",
+            border: `1px solid var(--border)`,
             borderRadius: 6,
             padding: "6px 12px",
             marginBottom: 16,
@@ -463,7 +729,7 @@ export default function App() {
           <h1 style={{
             fontSize: 32,
             fontWeight: 800,
-            color: "#0f172a",
+            color: "var(--text-primary)",
             lineHeight: 1.2,
             marginBottom: 8,
             fontFamily: "'DM Sans', sans-serif",
@@ -471,23 +737,29 @@ export default function App() {
             This Meeting Costs
           </h1>
           <p style={{
-            fontSize: 15,
-            color: "#64748b",
+            fontSize: 16,
+            color: "var(--text-secondary)",
             fontFamily: "'DM Sans', sans-serif",
           }}>
             Because someone should be keeping track.
           </p>
         </div>
 
-        {/* Attendee Picker */}
+        {/* Setup */}
         {!running && !showSummary && (
           <div style={{ animation: "fadeIn 0.4s ease" }}>
             {/* Quick Presets */}
             <div style={{ marginBottom: 24 }}>
-              <label style={{ display: "block", fontSize: 11, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: "#6b7280", marginBottom: 10, fontFamily: "'DM Sans', sans-serif" }}>
-                Quick Setup
+              <label style={{
+                display: "block", fontSize: 12, fontWeight: 600, letterSpacing: "0.1em",
+                textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 10,
+                fontFamily: "'DM Sans', sans-serif",
+              }}>
+                Meeting Presets
               </label>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <div style={{
+                display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8,
+              }} className="preset-grid">
                 {QUICK_PRESETS.map((preset, idx) => {
                   const isActive = JSON.stringify(attendees) === JSON.stringify(preset.attendees);
                   return (
@@ -495,39 +767,44 @@ export default function App() {
                       key={idx}
                       onClick={() => setAttendees([...preset.attendees])}
                       style={{
-                        padding: "8px 14px",
+                        padding: "10px 14px",
                         borderRadius: 8,
-                        border: isActive ? "1.5px solid #1e293b" : "1.5px solid #e2e8f0",
-                        background: isActive ? "#f0f9ff" : "#fff",
+                        border: isActive ? `1.5px solid var(--border-active)` : `1.5px solid var(--border)`,
+                        background: isActive ? "var(--preset-active-bg)" : "var(--bg-card)",
                         cursor: "pointer",
                         textAlign: "left",
                         fontFamily: "'DM Sans', sans-serif",
                         transition: "all 0.15s ease",
                       }}
                     >
-                      <div style={{ fontSize: 13, fontWeight: 600, color: "#1e293b" }}>{preset.label}</div>
-                      <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 1 }}>{preset.subtitle}</div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>{preset.label}</div>
+                      <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{preset.subtitle}</div>
                     </button>
                   );
                 })}
               </div>
             </div>
 
-            <AttendeePicker attendees={attendees} setAttendees={setAttendees} />
+            <AttendeePicker
+              attendees={attendees}
+              setAttendees={setAttendees}
+              customSalary={customSalary}
+              setCustomSalary={setCustomSalary}
+            />
 
             {totalAttendees > 0 && (
               <div style={{
                 textAlign: "center",
                 padding: "16px",
-                background: "#f8fafc",
+                background: "var(--burn-rate-bg)",
                 borderRadius: 10,
                 marginBottom: 24,
-                fontSize: 13,
-                color: "#64748b",
+                fontSize: 14,
+                color: "var(--text-secondary)",
                 fontFamily: "'DM Mono', monospace",
                 animation: "fadeIn 0.3s ease",
               }}>
-                {totalAttendees} attendee{totalAttendees !== 1 ? "s" : ""} · Burn rate: <strong style={{ color: "#0f172a" }}>{formatCurrency(costPerSecond * 3600)}/hr</strong>
+                {totalAttendees} attendee{totalAttendees !== 1 ? "s" : ""} · Burn rate: <strong style={{ color: "var(--text-primary)" }}>{formatCurrency(costPerSecond * 3600)}/hr</strong>
               </div>
             )}
           </div>
@@ -551,6 +828,7 @@ export default function App() {
             elapsed={elapsed}
             totalAttendees={totalAttendees}
             onReset={resetMeeting}
+            onCopy={handleCopy}
           />
         )}
 
@@ -566,8 +844,8 @@ export default function App() {
                   padding: "16px 24px",
                   borderRadius: 10,
                   border: "none",
-                  background: totalAttendees === 0 ? "#e2e8f0" : "#0f172a",
-                  color: totalAttendees === 0 ? "#94a3b8" : "#fff",
+                  background: totalAttendees === 0 ? "var(--border)" : "var(--btn-bg)",
+                  color: totalAttendees === 0 ? "var(--text-muted)" : "var(--btn-text)",
                   fontSize: 16,
                   fontWeight: 700,
                   cursor: totalAttendees === 0 ? "not-allowed" : "pointer",
@@ -604,8 +882,8 @@ export default function App() {
         <div style={{
           marginTop: 48,
           textAlign: "center",
-          fontSize: 12,
-          color: "#cbd5e1",
+          fontSize: 13,
+          color: "var(--text-footer)",
           fontFamily: "'DM Sans', sans-serif",
         }}>
           Salary data based on 2,080 working hours/year. No meetings were harmed in the making of this tool.
